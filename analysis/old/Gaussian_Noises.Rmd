@@ -1,0 +1,36 @@
+---
+title: "GaussianNoises"
+author: "h qin"
+date: "March 31, 2016"
+output: html_document
+---
+
+```{r}
+require(flexsurv)
+source("lifespan.r")
+#set.seed(2016)
+```
+
+For Gaussian noises X, Likelihood(X, Gompertz) ?<? Likelihood(X, Weibull) 
+```{r}
+popSize = 1000
+x = rnorm(n=popSize, mean=20, sd=3)
+fitGom = flexsurvreg(formula = Surv(x) ~ 1, dist="gompertz")
+fitWei = flexsurvreg(formula = Surv(x) ~ 1, dist="weibull")
+fitGom$loglik 
+fitWei$loglik 
+fitGom$loglik  < fitWei$loglik 
+```
+
+For Log-normal noises X,Likelihood(X, Gompertz) ?<? Likelihood(X, Weibull) 
+```{r}
+popSize = 1000
+x = rlnorm(n=popSize, mean=3, sd=1)
+fitGom = flexsurvreg(formula = Surv(x) ~ 1, dist="gompertz")
+fitWei = flexsurvreg(formula = Surv(x) ~ 1, dist="weibull")
+fitGom$loglik 
+fitWei$loglik 
+fitGom$loglik  < fitWei$loglik 
+```
+
+

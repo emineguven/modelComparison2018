@@ -1,0 +1,309 @@
+---
+title: "Weibull vs Gompertz model comparison with added normal noise"
+author: "e guven"
+date: "September, 2016"
+output: html_document
+---
+
+```{r}
+library('varhandle')
+library('flexsurv')
+library('stringr')
+
+```
+
+##load original data for analyzing
+
+```{r}
+new_rls<-read.csv("rls.csv")
+
+
+my.data=new_rls
+
+#my.data<-my.data[complete.cases(my.data$ref_lifespan_mean),]
+
+# uniquely determine the ref_lifespans of each experiments individually
+big_data<-my.data[!duplicated(my.data$ref_lifespans),] 
+
+
+```{r}
+
+#big_data = big_data[complete.cases(big_data$ref_lifespan_mean),]
+ref_lifespan_mean<-list()
+
+
+
+for (k in 1:(length(sort(unique(big_data$ref_lifespans))))){
+#k=94
+f1<-big_data$ref_lifespans
+f<-unfactor(f1[k])
+ref_lifespan_single<-as.numeric(unlist(str_split(f, ",")))
+ref_lifespan_single_mean<-mean(ref_lifespan_single)
+ref_lifespan_mean[[length(ref_lifespan_mean)+1]]<-ref_lifespan_single_mean
+
+#avg.ref.ls<-round(mean(c(ref_lifespan_single)))
+#x<-big_data$id
+#ref_lifespan_mean<-round(big_data$ref_lifespan_mean[k])
+
+
+}
+
+```
+
+```{r}
+big_data$ref_lifespan_mean<-unlist(ref_lifespan_mean)
+
+
+
+fit_names = c( 'genotype','media','mat','sd.ls','medianLS','Delta_LL','AvgLS','gompLogLik','gompRate','gompShape','weibLogLik','weibScale','weibShape')
+fit = data.frame(matrix(, nrow=length(fit_names), ncol=length(fit_names))) #set up a skeleton table
+names(fit) = c( "genotype","media","mat","sd.ls","medianLS","Delta_LL","AvgLS","gompLoglik","gompRate","gompShape","weibLogLik","weibScale","weibShape")
+
+
+lifespansChar_set<-big_data$set_lifespans
+lifespansChar_ref<-big_data$ref_lifespans
+
+
+```
+
+```{r}
+for (genotype_in in c(1:length(big_data$ref_name))){
+  
+  #genotype=117
+  
+  
+  lifespansChar_set1<-unfactor(lifespansChar_set[genotype_in])
+  #if lifespansChar_set1=="NA"
+  lifespansTemp_set =as.numeric(unlist(str_split(lifespansChar_set1, ",")))
+
+ 
+  lifespansChar_ref1<-unfactor(lifespansChar_ref[genotype_in])
+  lifespansTemp_ref =as.numeric(unlist(str_split(lifespansChar_ref1, ",")))
+  
+  lifespansTemp<-c(lifespansTemp_set,lifespansTemp_ref)             
+                       
+  
+  lifespansTemp[lifespansTemp < 0] <- 0
+  lifespansTemp <-floor(lifespansTemp+0.5)
+  lifespansTemp <- lifespansTemp[ lifespansTemp != 0 ]
+  
+  lifespanGomp = flexsurvreg(formula = Surv(lifespansTemp) ~ 1, dist = 'gompertz') ### Use the flexsurvreg package to fit lifespan data to gompertz or weibull distribution
+  lifespanWeib = flexsurvreg(formula = Surv(lifespansTemp) ~ 1, dist = 'weibull')  
+  
+## Fill in added columns in the controlConditions table with data from gompertz and weibull ##fitting. Columns are named according to respective variables
+  media<-big_data$ref_media
+  media=unfactor(media[genotype_in])
+  mat<-big_data$ref_mating_type
+  mat=unfactor(mat[genotype_in])
+  avgLS = mean(lifespansTemp)
+  StddevLS = sd(lifespansTemp)
+  medianLS = median(lifespansTemp)
+  gompShape = lifespanGomp$res[1,1]
+  gompRate = lifespanGomp$res[2,1]
+  gompLogLik = lifespanGomp$loglik
+  gompAIC = lifespanGomp$AIC
+  
+  weibShape = lifespanWeib$res[1,1]
+  weibScale = lifespanWeib$res[2,1]
+  weibLogLik = lifespanWeib$loglik
+  weibAIC = lifespanWeib$AIC   
+  
+  delta_LL = lifespanWeib$loglik- lifespanGomp$loglik
+  
+  genotype<-big_data$ref_name
+  
+  genotype=unfactor(genotype[genotype_in])
+  
+#fit_names = c( 'sd.ls','current.seed','i','medianLS','Delta_LL','AvgLS','gompLogLik','gompRat#e','gompShape','weibLogLik','weibScale','weibShape')
+  
+  fit = rbind(fit,c(genotype,media,mat,StddevLS,medianLS,delta_LL,avgLS,gompLogLik,gompRate,gompShape,weibLogLik,weibScale,weibShape))
+  #write.csv(fit, file="Results.csv", row.names=F)
+  #names(fit) = c( "genotype","media","mat","sd.ls","medianLS","Delta_LL","AvgLS","gompLoglik","gompRate","gompShape","weibLogLik","weibScale","weibShape")
+  
+  
+#fit= fit[!is.na(fit[,1]), ]
+  
+}
+
+
+
+
+new_fit<-fit[(length(fit_names)+1):length(fit[,1]),]
+
+write.csv(new_fit,"conditionsWeibRedo_emine_10102016.csv")
+```
+
+
+
+###read the analyzed data
+
+```{r}
+new_fit<-read.csv("conditionsWeibRedo_emine_10102016.csv")
+
+new_fit<-new_fit[-c(1),-c(21)]
+Delta_LL<-unlist(new_fit$Delta_LL)
+#hist(new_fit$avgLS)
+
+
+
+WT.BY4742<- new_fit[new_fit$genotype=="BY4742",]
+
+
+
+#WT.BY4742.temp<-WT.BY4742[WT.BY4742$temp==30,]
+WT.BY4742.media<-WT.BY4742[WT.BY4742$media=="YPD",]
+
+WT.BY4742.media<-WT.BY4742.media[WT.BY4742.media$mat=="MATalpha",]
+
+WT.BY4742.media= WT.BY4742.media[!is.na(WT.BY4742.media[,1]), ]
+
+
+
+#pdf(paste("plots/", "Histogram_empirical_data_WT_BY4742.pdf", sep=''))
+par(mfrow=c(3,1)) 
+hist(as.numeric(WT.BY4742.media$AvgLS),xlab="Mean Lifespan",main="Wild type: BY4742",
+     breaks=length(as.numeric(WT.BY4742.media$AvgLS))/5,col="gray",xlim=c(10,40),ylim=c(0,40))
+mtext('Total_experiments=2108',line=0)
+box(lty='1373',col='blue')
+#dev.off()
+
+hist(as.numeric(WT.BY4742.media$gompShape),xlab="G shape parameters",main="",
+     breaks=length(as.numeric(WT.BY4742.media$gompShape))/5,col="blue",xlim=c(0,0.16),ylim=c(0,70))
+
+box(lty='1373',col='blue')
+
+hist(log(as.numeric(WT.BY4742.media$gompRate)),xlab="log(R) rate parameters",main="",
+     breaks=length(as.numeric(WT.BY4742.media$gompRate))/10,col="green",xlim=c(-3,-10.15),ylim=c(0,150))
+
+box(lty='1373',col='blue')
+#dev.off()
+
+#pdf(paste("plots/", "Histogram_Delta_LL_empirical_data_WT_BY4742.pdf", sep=''))
+
+hist(WT.BY4742.media$Delta_LL,breaks=length(WT.BY4742.media$Delta_LL)/5,col="blue",xlim=c(-50,120),ylim=c(0,700),xlab=expression(paste( ~delta[LL])),main="WT BY4742")
+mtext('Total_experiments=2108',line=-6)
+box(lty='1373',col='blue')
+#dev.off()
+
+
+WT.BY4741<- new_fit[new_fit$genotype=="BY4741",]
+
+
+
+#WT.BY4742.temp<-WT.BY4742[WT.BY4742$temp==30,]
+WT.BY4741.media<-WT.BY4741[WT.BY4741$media=="YPD",]
+
+WT.BY4741.media<-WT.BY4741.media[WT.BY4741.media$mat=="MATa",]
+
+WT.BY4741.media= WT.BY4741.media[!is.na(WT.BY4741.media[,1]), ]
+
+
+
+#pdf(paste("plots/", "Histogram_empirical_data_WT_BY4741.pdf", sep=''))
+par(mfrow=c(3,1)) 
+hist(as.numeric(WT.BY4741.media$AvgLS),xlab="Mean Lifespan",main="Wild type: BY4741",
+     breaks=length(as.numeric(WT.BY4741.media$AvgLS))/5,col="gray",xlim=c(10,40),ylim=c(0,60))
+
+mtext('Total_experiments=396',line=0)
+box(lty='1373',col='blue')
+
+hist(as.numeric(WT.BY4741.media$gompShape),xlab="G shape parameters",main="",
+     breaks=length(as.numeric(WT.BY4741.media$gompShape))/5,col="blue",xlim=c(0.02,0.16),ylim=c(0,40))
+
+box(lty='1373',col='blue')
+
+hist(log(as.numeric(WT.BY4741.media$gompRate)),xlab="log(R) rate parameters",main="",
+     breaks=length(as.numeric(WT.BY4741.media$gompRate))/5,col="green",xlim=c(-2.9,-8),ylim=c(0,40))
+box(lty='1373',col='blue')
+#dev.off()
+
+
+WT.BY4743<- new_fit[new_fit$genotype=="BY4743",]
+
+WT.BY4743.media<-WT.BY4743[WT.BY4743$media=="YPD",]
+
+WT.BY4743.media<-WT.BY4743.media[WT.BY4743.media$mat=="diploid",]
+
+WT.BY4743.media= WT.BY4743.media[!is.na(WT.BY4743.media[,1]), ]
+
+
+
+#pdf(paste("plots/", "Histogram_empirical_data_WT_BY4743.pdf", sep=''))
+par(mfrow=c(3,1)) 
+hist(as.numeric(WT.BY4743.media$AvgLS),xlab="Mean Lifespan",main="Wild type: BY4743",
+    breaks=length(as.numeric(WT.BY4743.media$AvgLS)),col="gray",xlim=c(25,45),ylim=c(0,30))
+
+
+hist(as.numeric(WT.BY4743.media$gompShape),xlab="G shape parameters",main="",
+     breaks=length(as.numeric(WT.BY4743.media$gompShape)),col="blue",xlim=c(0.05,0.25),ylim=c(0,30))
+
+hist(as.numeric(WT.BY4743.media$gompRate),xlab="R rate parameters",main="",
+    breaks=length(as.numeric(WT.BY4743.media$gompRate)),col="green",xlim=c(0,0.01),ylim=c(0,40))
+#dev.off()
+
+
+
+###check coefficent of the variation: CV
+###Because small CV indicate less noisy and more robustness
+
+
+gompShape<-as.numeric(new_fit$gompShape)
+gompRate<-as.numeric(new_fit$gompRate)
+
+CV_gompShape<-sd(gompShape)/mean(gompShape)
+CV_gompRate<-sd(gompRate)/mean(gompRate)
+
+sd.Rls<-as.numeric(new_fit$sd.ls)
+avg.Rls<-as.numeric(new_fit$AvgLS)
+
+sd.Rls<-sd.Rls[!is.na(sd.Rls)]
+avg.Rls<-avg.Rls[!is.na(avg.Rls)]
+
+CV_sd.Rls<- sd(sd.Rls)/mean(sd.Rls)
+CV_avg.Rls<-sd(avg.Rls)/mean(avg.Rls)
+
+
+#How do noises influence likelihood surface of Gompertz and Weibull model? 
+
+WT.BY4742.media$CV<-WT.BY4742.media$sd.ls/WT.BY4742.media$AvgLS
+
+lm( WT.BY4742.media$gompLoglik ~ WT.BY4742.media$CV )
+
+summary(lm( WT.BY4742.media$gompLoglik ~ WT.BY4742.media$CV ))
+
+
+# We expect that larger CV (more noisy) 
+#data will bring down LLH of both Gomeprtz and Weibull models. 
+#However, Weibull’s decreasing LLH maybe slower than Gompertz. 
+
+
+plot(WT.BY4742.media$gompLoglik ~ WT.BY4742.media$CV,col='green',ylab='' )
+par(new=TRUE)
+plot(WT.BY4742.media$weibLogLik ~ WT.BY4742.media$CV,col='red',ylab='Loglik values')
+
+plot(WT.BY4742.media$gompLoglik ~ WT.BY4742.media$CV )
+m<-lm( WT.BY4742.media$gompLoglik ~ WT.BY4742.media$CV )
+abline(m,col='red',lty=2,lwd=2)
+
+
+summary(lm( WT.BY4742.media$weibLogLik ~ WT.BY4742.media$CV))
+
+plot(WT.BY4742.media$weibLogLik ~ WT.BY4742.media$CV )
+m<-lm( WT.BY4742.media$weibLogLik ~ WT.BY4742.media$CV )
+abline(m,col='red',lty=2,lwd=2)
+
+
+
+
+# We expect that larger CV (more noisy) 
+#data will bring down LLH of both Gomeprtz and Weibull models. 
+#However, Weibull’s decreasing LLH maybe slower than Gompertz. 
+
+
+
+CV_names = c('CV of mean(LS)','CV of sd(LS)', 'CV of gompShape','CV of gompRate')
+CV_results = c( CV_avg.Rls,CV_sd.Rls, CV_gompShape,CV_gompRate)
+CV.df<-data.frame(CV_names,CV_results)
+CV.df
+
+```
